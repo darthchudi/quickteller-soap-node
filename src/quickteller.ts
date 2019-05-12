@@ -4,22 +4,41 @@ import { Parser, Builder } from 'xml2js';
 import _ from 'lodash';
 import env from './env';
 import QuicktellerError from './errors';
+import { QUICKTELLER_SUCCESS } from './constants';
 
 /**
  * Base quickteller class
  */
 class Quickteller {
+  /**
+   * Quickteller SOAP client object
+   */
   private client: Client;
+
+  /**
+   * Converts an XML string to a javascript object.
+   */
   private toJSON: <T = any>(xml: string) => Promise<T>;
-  private toXML: any;
+
+  /**
+   * Converts a javascript object to an XML string
+   */
+  private toXML: (obj: object) => string;
 
   /**
    * Creates the quickteller SOAP client and the JSON & SOAP parsers for serializing and deserializng arguments and responses.
    */
   async init() {
+    if (!env.quickteller_soap_url || !env.quickteller_terminal_id)
+      throw new Error(
+        'The following environment variables are required to initialize the Quickteller client: QUICKTELLER_SOAP_URL, QUICKTELLER_TERMINAL_ID'
+      );
+
+    // TODO: Review the implications of doing this
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
     const xmlParser = new Parser({ explicitArray: false, mergeAttrs: true });
+
     const jsonParser = new Builder({
       headless: true,
       renderOpts: {
@@ -47,22 +66,22 @@ class Quickteller {
   }
 
   /**
-   * Gets all the Quickteller methods available in the SOAP service.
-   */
-  getMethods() {
-    return this.client.describe();
-  }
-
-  /**
    * Converts a javascript object `args` to an XML string and returns a JSON object that the `node-soap` can use to make a SOAP request that
    * Quickteller recognizes.
    * @param args The request arguments to be serialized to XML
    */
-  argumentBuilder(args: object) {
+  private argumentBuilder(args: object) {
     const xml = this.toXML(args);
     return {
       xmlParams: `<![CDATA[${xml}]]>`,
     };
+  }
+
+  /**
+   * Gets all the Quickteller methods available in the SOAP service.
+   */
+  getMethods() {
+    return this.client.describe();
   }
 
   /**
@@ -74,7 +93,8 @@ class Quickteller {
     const [rawResult] = await this.client.GetBillerCategoriesAsync();
     const { Response } = await this.toJSON(rawResult.GetBillerCategoriesResult);
 
-    if (Response.ResponseCode === '90000') return Response.CategoryList;
+    if (Response.ResponseCode === QUICKTELLER_SUCCESS)
+      return Response.CategoryList;
 
     throw new QuicktellerError(
       'An error occured while getting biller categories',
@@ -117,13 +137,114 @@ class Quickteller {
     const [rawResult] = await this.client.GetBillersAsync(args);
     const { Response } = await this.toJSON(rawResult.GetBillersResult);
 
-    if (Response.ResponseCode === '90000') return Response.BillerList;
+    if (Response.ResponseCode === QUICKTELLER_SUCCESS)
+      return Response.BillerList;
 
     throw new QuicktellerError(
       'An error occured while getting billers',
       Response.ResponseCode,
       Response.ResponseDescription
     );
+  }
+
+  /**
+   * Gets all of a biller's payment items
+   * @param BillerId The biller's id
+   */
+  async getBillerPaymentItems(BillerId: number | string) {
+    this.isClientInitialized();
+
+    const args = this.argumentBuilder({ SearchCriteria: { BillerId } });
+
+    //@ts-ignore
+    const [rawResult] = await this.client.GetBillerPaymentItemsAsync(args);
+    const { Response } = await this.toJSON(
+      rawResult.GetBillerPaymentItemsResult
+    );
+
+    if (Response.ResponseCode === QUICKTELLER_SUCCESS)
+      return Response.PaymentItemList.PaymentItem;
+
+    throw new QuicktellerError(
+      'An error occured while getting biller payment items',
+      Response.ResponseCode,
+      Response.ResponseDescription
+    );
+  }
+
+  /**
+   * Gets newly added billers.
+   */
+  async getLatestBillers() {
+    this.isClientInitialized();
+
+    //@ts-ignore
+    const [rawResult] = await this.client.GetLatestBillersAsync();
+    const { Response } = await this.toJSON(rawResult.GetLatestBillersResult);
+
+    if (Response.ResponseCode === QUICKTELLER_SUCCESS)
+      return Response.BillerList;
+
+    throw new QuicktellerError(
+      'An error occured while getting latest billers',
+      Response.ResponseCode,
+      Response.ResponseDescription
+    );
+  }
+
+  /**
+   * Validates a customer's details for a particular bill payment e.g DSTV decoder number is provided
+   * to validate DSTV subscription payment.
+   * @param PaymentCode The payment code of the bill
+   * @param CustomerId The customer's id for the `CustomerValidationField` e.g DSTV decoder number
+   * @param CustomerValidationField The name of the field to validate the customer's id against e.g `Decoder Number`
+   * @param WithDetails Whether to return the customer's details if found. Defaults to `true`
+   */
+  async validateCustomer(
+    PaymentCode: string | number,
+    CustomerId: string | number,
+    CustomerValidationField: string,
+    WithDetails = true
+  ) {
+    this.isClientInitialized();
+
+    const _args = {
+      RequestDetails: {
+        TerminalId: env.quickteller_terminal_id,
+        Customer: [
+          {
+            PaymentCode,
+            CustomerId,
+            CustomerValidationField,
+            WithDetails: WithDetails ? 'True' : 'False',
+          },
+        ],
+      },
+    };
+
+    const args = this.argumentBuilder(_args);
+
+    //@ts-ignore
+    const [rawResult] = await this.client.ValidateCustomerAsync(args);
+    const { Response } = await this.toJSON(rawResult.ValidateCustomerResult);
+
+    const { ResponseCode, ResponseDescription, Customer } = Response;
+
+    if (ResponseCode !== QUICKTELLER_SUCCESS)
+      throw new QuicktellerError(
+        'An error occured while attempting customer validation',
+        ResponseCode,
+        ResponseDescription
+      );
+
+    if (Customer.ResponseCode !== QUICKTELLER_SUCCESS)
+      throw new QuicktellerError(
+        `An error occured while validating ${CustomerValidationField} ${CustomerId}`,
+        Customer.ResponseCode,
+        Customer.ResponseDescription
+      );
+
+    return Customer;
   }
 }
 
