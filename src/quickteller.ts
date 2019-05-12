@@ -19,7 +19,7 @@ class Quickteller {
   private client: Client;
 
   /**
-   * Creates the quickteller SOAP client and the JSON & SOAP parsers for serializing and deserializng arguments and responses.
+   * Creates the quickteller SOAP client
    * @param requestPrefix 4 digit request prefix provided by Interswitch
    */
   async init() {
