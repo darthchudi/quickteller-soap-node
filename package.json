@@ -1,0 +1,32 @@
+{
+  "name": "quickteller-soap-node",
+  "version": "1.0.0",
+  "description": "Interacting with Quickteller's SOAP client in Node.js without tears",
+  "main": "index.js",
+  "scripts": {
+    "watch": "tsc --watch -p ./tsconfig.json"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/axios": "^0.14.0",
+    "@types/node": "^12.0.0",
+    "axios": "^0.18.0",
+    "dotenv": "^8.0.0",
+    "jest": "^24.7.1",
+    "lodash": "^4.17.11",
+    "node-soap": "^1.0.0",
+    "reflect-metadata": "^0.1.13",
+    "soap": "^0.26.0",
+    "strong-soap": "^1.19.1",
+    "typescript": "^3.4.5",
+    "xml2js": "^0.4.19",
+    "xml2json": "^0.11.2"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.126",
+    "@types/soap": "^0.21.0",
+    "@types/xml2js": "^0.4.4",
+    "@types/xml2json": "^0.10.0"
+  }
+}
