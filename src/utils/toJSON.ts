@@ -6,6 +6,6 @@ const parser = new Parser({ explicitArray: false, mergeAttrs: true });
 /**
  *  Converts an XML string to a javascript object.
  */
-export const toJSON: <T = any>(xml: string) => Promise<T> = promisify(
-  parser.parseString
-);
+export const toJSON: <T = any>(
+  xml: string
+) => Promise<{ Response: T }> = promisify(parser.parseString);

@@ -1,4 +1,4 @@
-import soap, { Client } from 'soap';
+import soap from 'soap';
 import env from './env';
 import QuicktellerError from './errors';
 import { QUICKTELLER_SUCCESS } from './constants';
@@ -7,7 +7,18 @@ import {
   removeEmptyFields,
   buildArguments,
   generateReference,
+  toArray,
 } from './utils';
+import {
+  QuicktellerClient,
+  GetBillerCategoriesResult,
+  GetBillersResult,
+  GetLatestBillersResult,
+  GetBillerPaymentItemsResult,
+  ValidateCustomerResult,
+  SendBillPaymentAdviceResult,
+  QueryTransactionResult,
+} from 'typings';
 
 /**
  * Base quickteller class
@@ -16,7 +27,7 @@ class Quickteller {
   /**
    * Quickteller SOAP client object
    */
-  private client: Client;
+  private client: QuicktellerClient;
 
   /**
    * Creates the quickteller SOAP client
@@ -64,9 +75,12 @@ class Quickteller {
    */
   async getBillerCategories() {
     this.isClientInitialized();
-    //@ts-ignore
+
     const [rawResult] = await this.client.GetBillerCategoriesAsync();
-    const { Response } = await toJSON(rawResult.GetBillerCategoriesResult);
+
+    const { Response } = await toJSON<GetBillerCategoriesResult>(
+      rawResult.GetBillerCategoriesResult
+    );
 
     if (Response.ResponseCode === QUICKTELLER_SUCCESS)
       return Response.CategoryList.Category;
@@ -106,12 +120,14 @@ class Quickteller {
       SearchCriteria,
     });
 
-    //@ts-ignore
     const [rawResult] = await this.client.GetBillersAsync(args);
-    const { Response } = await toJSON(rawResult.GetBillersResult);
+
+    const { Response } = await toJSON<GetBillersResult>(
+      rawResult.GetBillersResult
+    );
 
     if (Response.ResponseCode === QUICKTELLER_SUCCESS)
-      return Response.BillerList.Category.Biller;
+      return toArray(Response.BillerList.Category.Biller);
 
     throw new QuicktellerError(
       'An error occured while getting billers',
@@ -126,12 +142,14 @@ class Quickteller {
   async getLatestBillers() {
     this.isClientInitialized();
 
-    //@ts-ignore
     const [rawResult] = await this.client.GetLatestBillersAsync();
-    const { Response } = await toJSON(rawResult.GetLatestBillersResult);
+
+    const { Response } = await toJSON<GetLatestBillersResult>(
+      rawResult.GetLatestBillersResult
+    );
 
     if (Response.ResponseCode === QUICKTELLER_SUCCESS)
-      return Response.BillerList;
+      return toArray(Response.BillerList.Category.Biller);
 
     throw new QuicktellerError(
       'An error occured while getting latest billers',
@@ -149,12 +167,14 @@ class Quickteller {
 
     const args = buildArguments({ SearchCriteria: { BillerId } });
 
-    //@ts-ignore
     const [rawResult] = await this.client.GetBillerPaymentItemsAsync(args);
-    const { Response } = await toJSON(rawResult.GetBillerPaymentItemsResult);
+
+    const { Response } = await toJSON<GetBillerPaymentItemsResult>(
+      rawResult.GetBillerPaymentItemsResult
+    );
 
     if (Response.ResponseCode === QUICKTELLER_SUCCESS)
-      return Response.PaymentItemList.PaymentItem;
+      return toArray(Response.PaymentItemList.PaymentItem);
 
     throw new QuicktellerError(
       'An error occured while getting biller payment items',
@@ -194,9 +214,11 @@ class Quickteller {
 
     const args = buildArguments({ RequestDetails });
 
-    //@ts-ignore
     const [rawResult] = await this.client.ValidateCustomerAsync(args);
-    const { Response } = await toJSON(rawResult.ValidateCustomerResult);
+
+    const { Response } = await toJSON<ValidateCustomerResult>(
+      rawResult.ValidateCustomerResult
+    );
 
     const { ResponseCode, ResponseDescription, Customer } = Response;
 
@@ -221,6 +243,7 @@ class Quickteller {
 
   /**
    * Notifies the biller of the payment
+   * @returns The quickteller response and the automatically generated `RequestReference`
    */
   async sendBillPaymentAdvice(
     Amount: number,
@@ -246,14 +269,44 @@ class Quickteller {
 
     const args = buildArguments({ BillPaymentAdvice });
 
-    //@ts-ignore
     const [rawResult] = await this.client.SendBillPaymentAdviceAsync(args);
-    const { Response } = await toJSON(rawResult.SendBillPaymentAdviceResult);
+
+    const { Response } = await toJSON<SendBillPaymentAdviceResult>(
+      rawResult.SendBillPaymentAdviceResult
+    );
+
+    if (Response.ResponseCode === QUICKTELLER_SUCCESS)
+      return {
+        ...Response,
+        RequestReference: BillPaymentAdvice.RequestReference,
+      };
+
+    throw new QuicktellerError(
+      'An error occured while sending bill payment advice',
+      Response.ResponseCode,
+      Response.ResponseDescription
+    );
+  }
+
+  /**
+   * Retrieves the status of a transaction
+   * @param RequestReference Unique request reference returned by the `sendBillPaymentAdvice` method
+   */
+  async queryTransaction(RequestReference: string) {
+    this.isClientInitialized();
+
+    const args = buildArguments({ RequestDetails: { RequestReference } });
+
+    const [rawResult] = await this.client.QueryTransactionAsync(args);
+
+    const { Response } = await toJSON<QueryTransactionResult>(
+      rawResult.QueryTransactionResult
+    );
 
     if (Response.ResponseCode === QUICKTELLER_SUCCESS) return Response;
 
     throw new QuicktellerError(
-      'An error occured while sending bill payment advice',
+      'An error occured while querying transaction',
       Response.ResponseCode,
       Response.ResponseDescription
     );
