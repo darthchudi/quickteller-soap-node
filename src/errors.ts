@@ -10,7 +10,7 @@ export default class QuicktellerError extends Error {
    */
   constructor(
     message: string,
-    readonly code: number,
+    readonly code: number | string,
     readonly description: string
   ) {
     super(
