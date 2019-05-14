@@ -1,7 +1,7 @@
 import { Client } from 'soap';
 
 /**
- * Object with arbitrary keys and values
+ * Javascript bject with arbitrary keys and values
  */
 export type Object<T = any> = { [key: string]: T };
 
