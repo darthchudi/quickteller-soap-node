@@ -29,6 +29,8 @@ test('it throws an error if any of the methods are called without initializing t
     'queryTransaction',
   ];
 
+  expect.assertions(methods.length);
+
   for (const method of methods) {
     try {
       await quickteller[method]();
