@@ -1,7 +1,6 @@
 import soap from 'soap';
-import env from './env';
-import QuicktellerError from './errors';
-import { QUICKTELLER_SUCCESS } from './constants';
+import { QuicktellerError } from './errors';
+import { QUICKTELLER_SUCCESS, QUICKTELLER_BILLER_NOT_FOUND } from './constants';
 import {
   toJSON,
   removeEmptyFields,
@@ -10,6 +9,7 @@ import {
   toArray,
 } from './utils';
 import {
+  Object,
   QuicktellerClient,
   GetBillerCategoriesResult,
   GetBillersResult,
@@ -18,55 +18,60 @@ import {
   ValidateCustomerResult,
   SendBillPaymentAdviceResult,
   QueryTransactionResult,
-} from 'typings';
+} from './typings';
 
 /**
  * Base quickteller class
  */
-class Quickteller {
+export class Quickteller {
   /**
    * Quickteller SOAP client object
    */
   private client: QuicktellerClient;
 
+  private url: string;
+  private terminal_id: string;
+  private request_prefix: string;
+
   /**
    * Creates the quickteller SOAP client
-   * @param requestPrefix 4 digit request prefix provided by Interswitch
+   * @param url Quickteller SOAP url
+   * @param terminal_id Terminal Id provided by Interswitch
+   * @param request_prefix 4 digit request prefix provided by Interswitch
    */
-  async init() {
-    if (
-      !env.quickteller_soap_url ||
-      !env.quickteller_terminal_id ||
-      !env.quickteller_request_prefix
-    )
+  async init(url: string, terminal_id: string, request_prefix: string) {
+    if (!url || !terminal_id || !request_prefix)
       throw new Error(
-        `The following environment variables are required to initialize the Quickteller client: QUICKTELLER_SOAP_URL, 
-        QUICKTELLER_TERMINAL_ID, QUICKTELLER_REQUEST_PREFIX`
+        `Please provide all of the required values to initialize the soap client`
       );
 
     // TODO: Review the implications of doing this
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-    this.client = await soap.createClientAsync(
-      `${env.quickteller_soap_url}?wsdl`,
-      { endpoint: env.quickteller_soap_url }
-    );
+    this.url = url;
+    this.terminal_id = terminal_id;
+    this.request_prefix = request_prefix;
+
+    this.client = await soap.createClientAsync(`${this.url}?wsdl`, {
+      endpoint: this.url,
+    });
   }
 
   /**
    * Checks if the Quickteller SOAP client has been initialized
    */
-  private isClientInitialized() {
-    if (!this.client)
-      throw new Error(
-        'Please initialize the Quickteller client first by calling `.init()`'
-      );
+  isClientInitialized() {
+    if (this.client) return true;
+
+    throw new Error(
+      'Please initialize the Quickteller client first by calling `.init()`'
+    );
   }
 
   /**
    * Gets all the Quickteller methods available in the SOAP service.
    */
-  getMethods() {
+  getMethods(): Object {
     return this.client.describe();
   }
 
@@ -113,7 +118,7 @@ class Quickteller {
       BillerId,
       ChannelId,
       BillerName,
-      TerminalId: env.quickteller_terminal_id,
+      TerminalId: this.terminal_id,
     });
 
     const args = buildArguments({
@@ -126,14 +131,19 @@ class Quickteller {
       rawResult.GetBillersResult
     );
 
-    if (Response.ResponseCode === QUICKTELLER_SUCCESS)
-      return toArray(Response.BillerList.Category.Biller);
+    if (Response.ResponseCode !== QUICKTELLER_SUCCESS)
+      throw new QuicktellerError(
+        'An error occured while getting billers',
+        Response.ResponseCode,
+        Response.ResponseDescription
+      );
 
-    throw new QuicktellerError(
-      'An error occured while getting billers',
-      Response.ResponseCode,
-      Response.ResponseDescription
-    );
+    if (Response.BillerList.count === '0')
+      throw new QuicktellerError(
+        'Quickteller could not find billers that satsify this query'
+      );
+
+    return toArray(Response.BillerList.Category.Biller);
   }
 
   /**
@@ -176,6 +186,13 @@ class Quickteller {
     if (Response.ResponseCode === QUICKTELLER_SUCCESS)
       return toArray(Response.PaymentItemList.PaymentItem);
 
+    if (Response.ResponseCode === QUICKTELLER_BILLER_NOT_FOUND)
+      throw new QuicktellerError(
+        'Quickteller could not find the biller',
+        Response.ResponseCode,
+        Response.ResponseCodeGrouping
+      );
+
     throw new QuicktellerError(
       'An error occured while getting biller payment items',
       Response.ResponseCode,
@@ -208,7 +225,7 @@ class Quickteller {
     });
 
     const RequestDetails = {
-      TerminalId: env.quickteller_terminal_id,
+      TerminalId: this.terminal_id,
       Customer: customerParams,
     };
 
@@ -263,8 +280,8 @@ class Quickteller {
       CustomerId,
       CustomerMobile,
       CustomerEmail,
-      TerminalId: env.quickteller_terminal_id,
-      RequestReference: `${env.quickteller_request_prefix}${reference}`,
+      TerminalId: this.terminal_id,
+      RequestReference: `${this.request_prefix}${reference}`,
     });
 
     const args = buildArguments({ BillPaymentAdvice });
