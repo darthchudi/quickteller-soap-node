@@ -1,6 +1,10 @@
 import soap from 'soap';
 import { QuicktellerError } from './errors';
-import { QUICKTELLER_SUCCESS, QUICKTELLER_BILLER_NOT_FOUND } from './constants';
+import {
+  QUICKTELLER_SUCCESS,
+  QUICKTELLER_BILLER_NOT_FOUND,
+  QUICKTELLER_DATA_NOT_FOUND,
+} from './constants';
 import {
   toJSON,
   removeEmptyFields,
@@ -140,7 +144,7 @@ export class Quickteller {
 
     if (Response.BillerList.count === '0')
       throw new QuicktellerError(
-        'Quickteller could not find billers that satsify this query'
+        'Quickteller could not find billers that satisfy this query'
       );
 
     return toArray(Response.BillerList.Category.Biller);
@@ -298,6 +302,13 @@ export class Quickteller {
         RequestReference: BillPaymentAdvice.RequestReference,
       };
 
+    if (Response.ResponseCode === QUICKTELLER_BILLER_NOT_FOUND)
+      throw new QuicktellerError(
+        'Quickteller could not find the biller',
+        Response.ResponseCode,
+        Response.ResponseDescription
+      );
+
     throw new QuicktellerError(
       'An error occured while sending bill payment advice',
       Response.ResponseCode,
@@ -312,7 +323,9 @@ export class Quickteller {
   async queryTransaction(RequestReference: string) {
     this.isClientInitialized();
 
-    const args = buildArguments({ RequestDetails: { RequestReference } });
+    const args = buildArguments({
+      RequestDetails: { RequestReference, TerminalId: this.terminal_id },
+    });
 
     const [rawResult] = await this.client.QueryTransactionAsync(args);
 
@@ -321,6 +334,13 @@ export class Quickteller {
     );
 
     if (Response.ResponseCode === QUICKTELLER_SUCCESS) return Response;
+
+    if (Response.ResponseCode === QUICKTELLER_DATA_NOT_FOUND)
+      throw new QuicktellerError(
+        'An error occured while querying transaction',
+        Response.ResponseCode,
+        'Transaction not found'
+      );
 
     throw new QuicktellerError(
       'An error occured while querying transaction',
