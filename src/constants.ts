@@ -2,8 +2,9 @@
  * Quickteller success code
  */
 export const QUICKTELLER_SUCCESS = '90000';
-
-/**
- * Quickteller biller not found Id
- */
 export const QUICKTELLER_BILLER_NOT_FOUND = '70010';
+export const QUICKTELLER_UNRECOGNIZED_CUSTOMER = '70013';
+export const QUICKTELLER_INVALID_TRANSACTION_AMOUNT = '70066';
+export const QUICKTELLER_XML_NODE_MISSING = '20010';
+export const QUICKTELLER_XML_NODE_EMPTY = '20020';
+export const QUICKTELLER_DATA_NOT_FOUND = '70038';

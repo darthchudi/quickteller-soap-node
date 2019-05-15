@@ -204,4 +204,23 @@ export interface QueryTransactionResult extends QuicktellerResult {
   TransactionSet: string;
   TransactionResponseCode: string;
   Status: string;
+  ServiceProviderId: string;
+  ServiceCode: string;
+  ServiceName: string;
+  TransactionRef: string;
+  RequestReference: string;
+  PaymentDate: string;
+  Amount: string;
+  Surcharge: string;
+  CurrencyCode: string;
+  Customer: string;
+  CustomerEmail: string;
+  CustomerMobile: string;
+  BillPayment: {
+    Biller: string;
+    CustomerId1: string;
+    PaymentTypeName: string;
+    paymentTypeCode: string;
+    BillerId: string;
+  };
 }
